@@ -121,7 +121,7 @@ def parse_arguments() -> argparse.Namespace:
         help=(
             "Catalog file format. If not provided, guessed from the filename. "
             "'text' requires a space-delimited table containing flux and error "
-            "columns that match the filter configuration."
+            "columns that match the filter configuration. "
             "'fits' requires named HDU extensions and columns that match the "
             "filter configuration."
         ),
@@ -143,7 +143,7 @@ def parse_arguments() -> argparse.Namespace:
     id_group.add_argument(
         "--idlist",
         help=(
-            "Path to file containing whitespace delimited list of object ID"
+            "Path to file containing whitespace delimited list of object ID "
             "number(s) to fit."
         ),
     )
