@@ -7,6 +7,7 @@ license = "MIT"
 license-files = ["LICENSE"]
 requires-python = ">=3.13"
 dependencies = [
+  "astro-sedpy>=0.4.1",
   "corner>=2.2.3",
   "emcee>=3.1.6",
   "fitsio>=1.4.0",
@@ -21,9 +22,8 @@ dependencies = [
 
 [project.optional-dependencies]
 build-model = [
-    "astro-sedpy>=0.4.1",
-    "h5netcdf>=1.8.1",
-    "xarray>=2026.4",
+  "h5netcdf>=1.8.1",
+  "xarray>=2026.4",
 ]
 
 [project.scripts]

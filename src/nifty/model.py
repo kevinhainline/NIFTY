@@ -112,7 +112,10 @@ class ModelGrid:
             axes=tuple(meta["axes"]),
             model_name=meta["model_name"],
             fill_method=meta["fill_method"],
-            filters=tuple(meta["filters"]),
+            filters=tuple(
+                f.lower() if "_" in f else "jwst_" + f.lower()
+                for f in meta["filters"]
+            ),
             wave=arrays["wave"],
         )
 
@@ -381,22 +384,11 @@ def _change_filters(
     """
     Select a subset of filters from a flux data grid.
 
-    Assumes that both new_filters and filters are sorted.
     Raises KeyError if some filters in new_filters are not present in filters.
     """
-    new_filters_set = set(new_filters)
-    # Check to make sure the new filters are available in the existing ones.
-    if not new_filters_set.issubset(filters):
-        missing = new_filters_set.difference(filters)
-        raise KeyError(
-            "Not all new filters are contained in the data."
-            f"Missing filters {missing}."
-        )
-    # If include_filter[i] is True, filters[i] is included.
-    include_filter = np.fromiter(
-        (filter in new_filters_set for filter in filters), dtype=bool
-    )
-    return np.compress(include_filter, flux, axis=-1)
+    name_to_idx = {name: i for i, name in enumerate(filters)}
+    idx = [name_to_idx[name] for name in new_filters]
+    return np.take(flux, idx, axis=-1)
 
 
 def fill_point(

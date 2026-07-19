@@ -124,26 +124,25 @@ photometry fitting. Here is a sample entry:
 ```json
 {
   "filter_columns": {
-    "F115W": {
+    "JWST_F115W": {
       "extension": "CIRC",
       "flux": "F115W_CIRC3",
       "error": "F115W_CIRC3_e",
-      "wavelength": 1.154
     },
-    "F444W": {
+    "JWST_F444W": {
       "extension": "CIRC",
       "flux": "F444W_CIRC3",
       "error": "F444W_CIRC3_e",
-      "wavelength": 4.408
     }
   }
 }
 ```
+The filter name must match a [valid sedpy filter](https://github.com/bd-j/sedpy/blob/main/sedpy/data/filters/README.md).
+If no telescope prefix is provided, the prefix is assumed to be "JWST_".
 
 - `extension`: the FITS HDU name where this filter's data lives. Ignored for 
 plain-text catalogs.
 - `flux` / `error`: exact column names in the photometry file.
-- `wavelength`: filter central wavelength in microns, used for plotting.
 
 An example config file for JADES NIRCam + MIRI observations is included as
 `BD_NIRCam_MIRI_filters.json`.

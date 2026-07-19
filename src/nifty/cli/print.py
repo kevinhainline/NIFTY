@@ -59,6 +59,8 @@ def print_filters(filter_names: Sequence[str]) -> None:
     filter_names : sequence of str
         Names of the filters to print.
     """
+    # Display filter names in uppercase and remove any prefix (e.g. "JWST_").
+    filter_names = [name.upper().split("_")[-1] for name in filter_names]
     print("    Using " + str(len(filter_names)) + " filters:")
     line = "       " + filter_names[0]
     for i in range(1, len(filter_names)):

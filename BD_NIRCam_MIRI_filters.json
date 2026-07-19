@@ -1,112 +1,94 @@
 {
   "filter_columns": {
-    "F090W": {
+    "JWST_F090W": {
       "extension": "CIRC",
       "flux": "F090W_CIRC3",
-      "error": "F090W_CIRC3_e",
-      "wavelength": 0.902
+      "error": "F090W_CIRC3_e"
     },
-    "F115W": {
+    "JWST_F115W": {
       "extension": "CIRC",
       "flux": "F115W_CIRC3",
-      "error": "F115W_CIRC3_e",
-      "wavelength": 1.154
+      "error": "F115W_CIRC3_e"
     },
-    "F150W": {
+    "JWST_F150W": {
       "extension": "CIRC",
       "flux": "F150W_CIRC3",
-      "error": "F150W_CIRC3_e",
-      "wavelength": 1.501
+      "error": "F150W_CIRC3_e"
     },
-    "F162M": {
+    "JWST_F162M": {
       "extension": "CIRC",
       "flux": "F162M_CIRC3",
-      "error": "F162M_CIRC3_e",
-      "wavelength": 1.624
+      "error": "F162M_CIRC3_e"
     },
-    "F182M": {
+    "JWST_F182M": {
       "extension": "CIRC",
       "flux": "F182M_CIRC3",
-      "error": "F182M_CIRC3_e",
-      "wavelength": 1.845
+      "error": "F182M_CIRC3_e"
     },
-    "F200W": {
+    "JWST_F200W": {
       "extension": "CIRC",
       "flux": "F200W_CIRC3",
-      "error": "F200W_CIRC3_e",
-      "wavelength": 1.989
+      "error": "F200W_CIRC3_e"
     },
-    "F210M": {
+    "JWST_F210M": {
       "extension": "CIRC",
       "flux": "F210M_CIRC3",
-      "error": "F210M_CIRC3_e",
-      "wavelength": 2.096
+      "error": "F210M_CIRC3_e"
     },
-    "F250M": {
+    "JWST_F250M": {
       "extension": "CIRC",
       "flux": "F250M_CIRC3",
-      "error": "F250M_CIRC3_e",
-      "wavelength": 2.503
+      "error": "F250M_CIRC3_e"
     },
-    "F277W": {
+    "JWST_F277W": {
       "extension": "CIRC",
       "flux": "F277W_CIRC3",
-      "error": "F277W_CIRC3_e",
-      "wavelength": 2.762
+      "error": "F277W_CIRC3_e"
     },
-    "F300M": {
+    "JWST_F300M": {
       "extension": "CIRC",
       "flux": "F300M_CIRC3",
-      "error": "F300M_CIRC3_e",
-      "wavelength": 2.996
+      "error": "F300M_CIRC3_e"
     },
-    "F335M": {
+    "JWST_F335M": {
       "extension": "CIRC",
       "flux": "F335M_CIRC3",
-      "error": "F335M_CIRC3_e",
-      "wavelength": 3.362
+      "error": "F335M_CIRC3_e"
     },
-    "F356W": {
+    "JWST_F356W": {
       "extension": "CIRC",
       "flux": "F356W_CIRC3",
-      "error": "F356W_CIRC3_e",
-      "wavelength": 3.568
+      "error": "F356W_CIRC3_e"
     },
-    "F410M": {
+    "JWST_F410M": {
       "extension": "CIRC",
       "flux": "F410M_CIRC3",
-      "error": "F410M_CIRC3_e",
-      "wavelength": 4.082
+      "error": "F410M_CIRC3_e"
     },
-    "F444W": {
+    "JWST_F444W": {
       "extension": "CIRC",
       "flux": "F444W_CIRC3",
-      "error": "F444W_CIRC3_e",
-      "wavelength": 4.408
+      "error": "F444W_CIRC3_e"
     },
-    "F560W": {
+    "JWST_F560W": {
       "extension": "MIRI",
       "flux": "F560W_CIRC3",
-      "error": "F560W_CIRC3_e",
-      "wavelength": 5.600
+      "error": "F560W_CIRC3_e"
     },
-    "F770W": {
+    "JWST_F770W": {
       "extension": "MIRI",
       "flux": "F770W_CIRC3",
-      "error": "F770W_CIRC3_e",
-      "wavelength": 7.700
+      "error": "F770W_CIRC3_e"
     },
-    "F1000W": {
+    "JWST_F1000W": {
       "extension": "MIRI",
       "flux": "F1000W_CIRC3",
-      "error": "F1000W_CIRC3_e",
-      "wavelength": 10.00
+      "error": "F1000W_CIRC3_e"
     },
-    "F1280W": {
+    "JWST_F1280W": {
       "extension": "MIRI",
       "flux": "F1280W_CIRC3",
-      "error": "F1280W_CIRC3_e",
-      "wavelength": 12.80
+      "error": "F1280W_CIRC3_e"
     }
   }
 }
