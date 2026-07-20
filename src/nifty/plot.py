@@ -105,6 +105,7 @@ def plot_photometry(
     central_wave: npt.NDArray[np.float32],
     obj_flux: npt.NDArray[np.float32],
     obj_error: npt.NDArray[np.float32],
+    valid_flux: npt.NDArray[np.bool_],
     obj_id: int,
     model_phot_flux: npt.NDArray[np.float32],
     model_spec_wave: npt.NDArray[np.float32],
@@ -123,19 +124,21 @@ def plot_photometry(
         Central wavelengths of filters in object photometry in microns.
     obj_flux : ndarray
         Object photometric flux.
-    obj_error: ndarray
+    obj_error : ndarray
         Object photometric flux error.
-    obj_id: int
+    valid_flux : ndarray
+        Boolean mask of valid object fluxes.
+    obj_id : int
         Object ID number.
-    model_phot_flux: ndarray
+    model_phot_flux : ndarray
         Model photometric flux.
-    model_spec_wave: ndarray
+    model_spec_wave : ndarray
         Wavelength of model spectroscopy in Angstroms.
-    model_spec_flux: ndarray
+    model_spec_flux : ndarray
         Model spectroscopic flux.
-    model_spec_flux_lower: ndarray
+    model_spec_flux_lower : ndarray
         Lower bound of 68% confidence interval for model spectroscopy.
-    model_spec_flux_upper: ndarray
+    model_spec_flux_upper : ndarray
         Upper bound of 68% confidence interval for model spectroscopy.
     chi_sq_red : float
         Chi-square reduced value between observed and model photometry.
@@ -147,8 +150,8 @@ def plot_photometry(
     """
     model_spec_wave = model_spec_wave / 1e4  # um
     ax.scatter(
-        central_wave,
-        obj_flux,
+        central_wave[valid_flux],
+        obj_flux[valid_flux],
         s=40,
         color="black",
         alpha=1.0,
@@ -156,9 +159,9 @@ def plot_photometry(
         label="Observed Photometry",
     )
     ax.errorbar(
-        central_wave,
-        obj_flux,
-        yerr=obj_error,
+        central_wave[valid_flux],
+        obj_flux[valid_flux],
+        yerr=obj_error[valid_flux],
         color="black",
         ls="None",
         alpha=0.8,
@@ -219,6 +222,7 @@ def plot_spectrum(
     wave: npt.NDArray[np.float32],
     obj_flux: npt.NDArray[np.float32],
     obj_error: npt.NDArray[np.float32],
+    valid_flux: npt.NDArray[np.bool_],
     obj_id: int,
     model_wave: npt.NDArray[np.float32],
     model_flux: npt.NDArray[np.float32],
@@ -236,17 +240,19 @@ def plot_spectrum(
         Wavelength of object spectroscopy in Angstroms.
     obj_flux : ndarray
         Object spectroscopic flux.
-    obj_error: ndarray
+    obj_error : ndarray
         Object spectroscopic flux error.
-    obj_id: int
+    valid_flux : ndarray
+        Boolean mask of valid object fluxes.
+    obj_id : int
         Object ID number.
-    model_wave: ndarray
+    model_wave : ndarray
         Wavelength of model spectroscopy in Angstroms.
-    model_flux: ndarray
+    model_flux : ndarray
         Model spectroscopic flux.
-    model_flux_lower: ndarray
+    model_flux_lower : ndarray
         Lower bound of 68% confidence interval for model spectroscopy.
-    model_flux_upper: ndarray
+    model_flux_upper : ndarray
         Upper bound of 68% confidence interval for model spectroscopy.
     chi_sq_red : float
         Chi-square reduced value between observed and model spectroscopy.
@@ -258,21 +264,24 @@ def plot_spectrum(
     """
     wave = wave / 1e4  # um
     model_wave = model_wave / 1e4  # um
+    ax.fill_between(
+        wave[valid_flux],
+        (obj_flux - obj_error)[valid_flux],
+        (obj_flux + obj_error)[valid_flux],
+        step="mid",
+        color="black",
+        alpha=0.2,
+        label=r"Observed 68\% Confidence",
+        zorder=14,
+    )
     ax.step(
-        wave,
-        obj_flux,
+        wave[valid_flux],
+        obj_flux[valid_flux],
+        where="mid",
         color="black",
         alpha=0.5,
         label="Observed Spectrum",
         zorder=15,
-    )
-    ax.errorbar(
-        wave,
-        obj_flux,
-        yerr=obj_error,
-        color="black",
-        alpha=0.2,
-        zorder=14,
     )
     ax.fill_between(
         model_wave,
@@ -281,12 +290,13 @@ def plot_spectrum(
         step="mid",
         color="red",
         alpha=0.5,
-        label="68% Confidence",
+        label=r"Model 68\% Confidence",
         zorder=17,
     )
     ax.step(
         model_wave,
         model_flux,
+        where="mid",
         color="red",
         alpha=1.0,
         label=(
