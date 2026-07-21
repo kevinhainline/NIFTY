@@ -1,6 +1,7 @@
 """NIFTY-style plots."""
 
 import corner
+import matplotlib
 import numpy as np
 import numpy.typing as npt
 from matplotlib.axes import Axes
@@ -189,7 +190,9 @@ def plot_photometry(
         step="mid",
         color="red",
         alpha=0.1,
-        label=r"68\% Confidence",
+        label=r"68\% Confidence"
+        if matplotlib.rcParams["text.usetex"]
+        else "68% Confidence",
         zorder=11,
     )
     ax.step(
@@ -271,7 +274,9 @@ def plot_spectrum(
         step="mid",
         color="black",
         alpha=0.2,
-        label=r"Observed 68\% Confidence",
+        label=r"Observed 68\% Confidence"
+        if matplotlib.rcParams["text.usetex"]
+        else "Observed 68% Confidence",
         zorder=14,
     )
     ax.step(
@@ -290,7 +295,9 @@ def plot_spectrum(
         step="mid",
         color="red",
         alpha=0.5,
-        label=r"Model 68\% Confidence",
+        label=r"Model 68\% Confidence"
+        if matplotlib.rcParams["text.usetex"]
+        else "Model 68% Confidence",
         zorder=17,
     )
     ax.step(

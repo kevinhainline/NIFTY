@@ -29,8 +29,6 @@ from .print import (
     print_separator,
 )
 
-# Uses system's external TeX engine instead of matplotlib's.
-matplotlib.rcParams["text.usetex"] = True
 warnings.filterwarnings("ignore")
 
 
@@ -105,6 +103,11 @@ def parse_arguments() -> argparse.Namespace:
         choices=["mcmc", "nautilus"],
         default="mcmc",
     )
+    parent_parser.add_argument(
+        "--notex",
+        help="Use matplotlib Mathtext instead of system TeX for plots.",
+        action="store_true",
+    )
 
     # Parser for photometry mode.
     phot_parser = subparsers.add_parser(
@@ -176,6 +179,29 @@ def parse_arguments() -> argparse.Namespace:
 def main():
     args = parse_arguments()
     print_banner()
+
+    if args.notex:
+        print("Using matplotlib Mathtext for plots.")
+        matplotlib.rcParams.update(
+            {
+                # Settings that try to get closer to TeX defaults.
+                "text.usetex": False,
+                "mathtext.fontset": "cm",
+                "font.family": "sans-serif",
+                "font.size": 10,
+                "axes.labelsize": 9,
+                "legend.fontsize": 9,
+                "xtick.labelsize": 8,
+                "ytick.labelsize": 8,
+            }
+        )
+    else:
+        print("Using system TeX engine for plotting.")
+        matplotlib.rcParams.update(
+            {
+                "text.usetex": True,
+            }
+        )
 
     # Load the model grid.
     print(f"Loading the model grid from {args.model}")
