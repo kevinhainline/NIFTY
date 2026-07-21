@@ -115,6 +115,7 @@ nifty spec \
 | `--output` | Output folder (default: `<Model>_output/`) |
 | `--frac_model_floor` | Fractional model flux floor added in quadrature to photometry errors, to account for model systematics (e.g. `0.03` for 3%). Photometry mode only; no floor is applied in spectroscopy mode. |
 | `--sampler` | Sampler used to estimate the posterior. Currently supports `mcmc` and `nautilus` |
+| `--notex` | Use matplotlib Mathtext instead of system TeX for plots. |
 
 ## Configuration File (`--config`)
 
