@@ -1,7 +1,6 @@
 """Main NIFTY CLI."""
 
 import argparse
-import json
 import time
 import warnings
 from functools import partial
@@ -10,8 +9,10 @@ from pathlib import Path
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
+from sedpy.observate import Filter
 
 from ..load import (
+    load_filter_info,
     load_phot_catalog_fits,
     load_phot_catalog_text,
     load_spec_text,
@@ -120,7 +121,7 @@ def parse_arguments() -> argparse.Namespace:
         help=(
             "Catalog file format. If not provided, guessed from the filename. "
             "'text' requires a space-delimited table containing flux and error "
-            "columns that match the filter configuration."
+            "columns that match the filter configuration. "
             "'fits' requires named HDU extensions and columns that match the "
             "filter configuration."
         ),
@@ -142,7 +143,7 @@ def parse_arguments() -> argparse.Namespace:
     id_group.add_argument(
         "--idlist",
         help=(
-            "Path to file containing whitespace delimited list of object ID"
+            "Path to file containing whitespace delimited list of object ID "
             "number(s) to fit."
         ),
     )
@@ -197,15 +198,12 @@ def main():
     # Load the object data and create the model with the correct filters / wave.
     if args.mode == "phot":
         print(f"Opening config/filters json file: {args.config}")
-        with open(args.config, "r") as f:
-            filter_config = json.load(f)["filter_columns"]
-        filter_names = tuple(filter_config.keys())
+        filter_info = load_filter_info(args.config)
+        filter_names = tuple(str(info["name"]) for info in filter_info)
         filter_central_wavelength = np.array(
-            [desc["wavelength"] for desc in filter_config.values()],
+            [Filter(name).wave_pivot / 1e4 for name in filter_names],
             dtype=np.float32,
-        )
-        # Simple description of each filter in a list.
-        filter_desc = list(filter_config.values())
+        )  # um
         print_filters(filter_names)
 
         # Create the model with an extra distance parameter.
@@ -233,11 +231,11 @@ def main():
             else:
                 format = "text"
         if format == "fits":
-            flux, error = load_phot_catalog_fits(args.catalog, filter_desc, ids)
+            flux, error = load_phot_catalog_fits(args.catalog, filter_info, ids)
         else:
             try:
                 flux, error = load_phot_catalog_text(
-                    args.catalog, filter_desc, ids
+                    args.catalog, filter_info, ids
                 )
             except Exception as e:
                 raise ValueError(

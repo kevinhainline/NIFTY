@@ -13,16 +13,10 @@ import numpy as np
 import numpy.typing as npt
 import pandas as pd
 from scipy.interpolate import interp1d
-
-try:
-    from sedpy.observate import Filter
-except ImportError:
-    raise ImportError(
-        "Building models requires the [build-model] optional dependencies. "
-        "Install with `pip install astro-nifty[build-model]`"
-    )
+from sedpy.observate import Filter
 from tqdm import tqdm
 
+from .load import load_filter_info
 from .model import ModelGrid
 
 __all__ = [
@@ -156,13 +150,9 @@ def load_filters(path: str | Path) -> tuple[list[Filter], list[str]]:
     filter_names : list of str
         Filter names.
     """
-    with open(path, "r") as f:
-        config = json.load(f)
-    filter_names = list(config["filter_columns"].keys())
-    # Build Filter objects once and reuse.
-    # Use lower because data files are all lowercase, and some file systems are
-    # case sensitive.
-    filters = [Filter("jwst_" + fn.lower()) for fn in filter_names]
+    filter_info = load_filter_info(path)
+    filter_names = [str(info["name"]) for info in filter_info]
+    filters = [Filter(name) for name in filter_names]
     return filters, filter_names
 
 

@@ -1,5 +1,6 @@
-"""Load photometry and spectroscopy data from various file formats."""
+"""Load observed data and filters from various file formats."""
 
+import json
 from collections.abc import Sequence
 from pathlib import Path
 
@@ -9,7 +10,12 @@ import numpy.typing as npt
 import pandas as pd
 from numpy.lib.recfunctions import structured_to_unstructured
 
-__all__ = ["load_phot_catalog_fits", "load_phot_catalog_text", "load_spec_text"]
+__all__ = [
+    "load_filter_info",
+    "load_phot_catalog_fits",
+    "load_phot_catalog_text",
+    "load_spec_text",
+]
 
 
 def load_phot_catalog_text(
@@ -150,3 +156,35 @@ def load_spec_text(
     # Sort by wavelength.
     data = data[data[:, 0].argsort()]
     return data[:, 0], data[:, 1], data[:, 2]
+
+
+def load_filter_info(path: str | Path) -> Sequence[dict[str, str | int]]:
+    """Load filter information from a NIFTY configuration file.
+
+    Parameters
+    ----------
+    path : str or Path
+        Path to the NIFTY configuration file to load.
+
+    Returns
+    -------
+    filter_info : sequence of dict
+        Information dictionary for each filter with the key "name" for the
+        sedpy filter name and remaining items specified in the filter
+        configuration file.
+
+    Notes
+    -----
+    If the filter name is not prefixed with the telescope name (e.g. "jwst_"),
+    it is assumed to be a JWST filter.
+    """
+    with open(path) as f:
+        filter_config = json.load(f)["filter_columns"]
+    filters = [
+        {
+            "name": name.lower() if "_" in name else "jwst_" + name.lower(),
+            **load_info,
+        }
+        for name, load_info in filter_config.items()
+    ]
+    return filters
