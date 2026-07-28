@@ -194,6 +194,17 @@ Each file name is prefixed with `<stub>_<ID>_<Model>_`.
 All fits assume a source radius of 1 Jupiter radius. Distances are always
 reported in parsecs.
 
+## The ModelGrid Files
+
+While you can create your own ModelGrid files for fitting (see below), we have prepared
+files for the ATMO2020, LOWZ, Sonora Elf Owl, and SonoraElfOwlPH3 fits at this link:
+
+[https://arizona.box.com/v/NiftyModelGrids](https://arizona.box.com/v/NiftyModelGrids)
+
+These files range in size from 2 - 300 MB, and you can point NIFTY at these to run
+fits. They include all of the JWST NIRCam and MIRI filters, as well as the Roman WFI
+filters for use with future Roman HLWAS observations. 
+
 
 ## Creating the ModelGrid Files
 
