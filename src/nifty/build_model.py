@@ -33,11 +33,14 @@ __all__ = [
 WAVE_START = 0.3  # um
 WAVE_STOP = 15  # um
 WAVE_RES = 1500
-LOWER_RES_WAVE = np.geomspace(
-    WAVE_START,
-    WAVE_STOP,
-    int(np.ceil(WAVE_RES * np.log(WAVE_STOP / WAVE_START))) + 1,
-).astype(np.float32) * 1e4  # Ang
+LOWER_RES_WAVE = (
+    np.geomspace(
+        WAVE_START,
+        WAVE_STOP,
+        int(np.ceil(WAVE_RES * np.log(WAVE_STOP / WAVE_START))) + 1,
+    ).astype(np.float32)
+    * 1e4
+)  # Ang
 
 
 class _SupportsReadBytes(Protocol):

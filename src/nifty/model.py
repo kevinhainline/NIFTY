@@ -3,7 +3,7 @@
 import io
 import json
 import tarfile
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Self
@@ -77,19 +77,42 @@ class ModelGrid:
     wave: np.ndarray[tuple[int], np.dtype[np.float32]]
 
     @classmethod
-    def load(cls, path: str | Path) -> Self:
+    def load(
+        cls,
+        path: str | Path,
+        *,
+        spec_reduction: Callable[
+            [npt.NDArray[np.float32]],
+            tuple[
+                npt.NDArray[np.float32],
+                Callable[[npt.NDArray[np.float32]], npt.NDArray[np.float32]],
+            ],
+        ]
+        | None = None,
+        chunk_size: int = 4096,
+    ) -> Self:
         """Load a ModelGrid from a file.
 
         Parameters
         ----------
-        path : str
+        path : str or Path
             Path to the file to load.
+        spec_reduction : callable, optional
+            Called once with the source wavelength array in Angstroms. It
+            returns (wave_out, reduce_flux), where reduce_flux maps
+            each F_nu chunk of shape (C, N) in nJy to shape (C, M).
+            If omitted, load the original spectroscopy array.
+        chunk_size : int, default=4096
+            Maximum number of flattened spectra supplied to reduce_flux at
+            once. Used only when spec_reduction is provided.
 
         Returns
         -------
-        obj : ModelGrid
+        model_grid : ModelGrid
             An instance of the ModelGrid loaded from the file.
         """
+        if chunk_size < 1:
+            raise ValueError("chunk_size must be positive.")
         with tarfile.open(path, mode="r|gz") as tar:
             meta_member = tar.next()
             if meta_member is None:
@@ -105,8 +128,63 @@ class ModelGrid:
                 name = Path(member.name).stem
                 array_file = tar.extractfile(member)
                 assert array_file is not None
+                if name == "spec" and spec_reduction is not None:
+                    continue
                 arrays[name] = np.load(io.BytesIO(array_file.read()))
             points = tuple(arrays[name] for name in meta["axes"])
+        if spec_reduction is not None:
+            wave_in = arrays["wave"]
+            wave_out, reduce_flux = spec_reduction(wave_in)
+            wave_out = np.asarray(wave_out, dtype=np.float32)
+            with tarfile.open(path, mode="r|gz") as tar:
+                for member in tar:
+                    if Path(member.name).stem == "spec":
+                        spec_file = tar.extractfile(member)
+                        assert spec_file is not None
+                        version = np.lib.format.read_magic(spec_file)
+                        if version == (1, 0):
+                            shape, fortran, dtype = (
+                                np.lib.format.read_array_header_1_0(spec_file)
+                            )
+                        elif version == (2, 0):
+                            shape, fortran, dtype = (
+                                np.lib.format.read_array_header_2_0(spec_file)
+                            )
+                        else:
+                            raise ValueError(
+                                f"Unsupported spec.npy version: {version}"
+                            )
+                        if fortran or dtype.hasobject or len(shape) < 2:
+                            raise ValueError(
+                                "spec.npy must be a C-order numeric grid."
+                            )
+                        count = int(np.prod(shape[:-1]))
+                        output = np.empty(
+                            (count, len(wave_out)), dtype=np.float32
+                        )
+                        for start in range(0, count, chunk_size):
+                            rows = min(chunk_size, count - start)
+                            raw = spec_file.read(
+                                rows * shape[-1] * dtype.itemsize
+                            )
+                            if len(raw) != rows * shape[-1] * dtype.itemsize:
+                                raise ValueError("Truncated spec.npy data.")
+                            chunk = np.frombuffer(raw, dtype=dtype).reshape(
+                                rows, shape[-1]
+                            )
+                            reduced = np.asarray(reduce_flux(chunk))
+                            if reduced.shape != (rows, len(wave_out)):
+                                raise ValueError(
+                                    "Spectrum reducer returned an invalid chunk shape."
+                                )
+                            output[start : start + rows] = reduced
+                        arrays["spec"] = output.reshape(
+                            shape[:-1] + (len(wave_out),)
+                        )
+                        arrays["wave"] = wave_out
+                        break
+                else:
+                    raise ValueError("Archive has no spec.npy member.")
         return cls(
             points=points,
             phot=arrays["phot"],

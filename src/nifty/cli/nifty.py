@@ -23,7 +23,7 @@ from ..model import Model, ModelGrid, linear_teff
 from ..plot import plot_corner, plot_photometry, plot_spectrum
 from ..prob import BayesianProbability, valid_observation_mask
 from ..sample import PosteriorSamples, sample_mcmc, sample_nautilus
-from ..spectra import trim_wavelength_coverage_mask
+from ..spectra import resample_reduction
 from .print import (
     print_banner,
     print_filters,
@@ -236,9 +236,22 @@ def main():
             }
         )
 
-    # Load the model grid.
+    # Load the SED on a compact wavelength grid for both fitting modes.
     print(f"Loading the model grid from {args.model}")
-    model_grid = ModelGrid.load(args.model)
+    sed_wave = (
+        np.geomspace(
+            0.75,
+            15,
+            int(np.ceil(300 * np.log(15 / 0.75))) + 1,
+        ).astype(np.float32)
+        * 1e4
+    )
+    model_grid = ModelGrid.load(
+        args.model,
+        spec_reduction=resample_reduction(
+            sed_wave, clip_to_coverage=True
+        ),
+    )
     if (
         args.mode == "phot"
         and np.any(np.isnan(model_grid.phot))
@@ -317,13 +330,16 @@ def main():
         objects = [obj for obj in zip(ids, flux, error)]
     elif args.mode == "spec":
         wave, flux, error = load_spec_text(args.spectrum)
-        coverage_mask = trim_wavelength_coverage_mask(wave, model_grid.wave)
+        fit_grid = ModelGrid.load(
+            args.model,
+            spec_reduction=resample_reduction(wave, clip_to_coverage=True),
+        )
+        coverage_mask = np.isin(wave, fit_grid.wave)
         if not np.any(coverage_mask):
             raise ValueError(
                 "Spectrum has no wavelength bins within model coverage."
             )
-        fit_wave = wave[coverage_mask]
-        model = Model.spec(model_grid, wave, fit_mask=coverage_mask)
+        model = Model.spec(fit_grid)
         objects = [(args.obj_id, flux[coverage_mask], error[coverage_mask])]
 
     # We have to create a new model for spectroscopy, since NIFTY uses the
@@ -529,7 +545,7 @@ def main():
                     (
                         filter_central_wavelength
                         if args.mode == "phot"
-                        else fit_wave / 1e4
+                        else fit_grid.wave / 1e4
                     ),
                     model_median,
                 )

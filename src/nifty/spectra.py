@@ -9,6 +9,7 @@ __all__ = [
     "flambda_to_fnu",
     "fnu_to_flambda",
     "resample_spectrum",
+    "resample_reduction",
     "trim_wavelength_coverage",
     "trim_wavelength_coverage_mask",
 ]
@@ -95,6 +96,50 @@ def resample_spectrum(
         fill=np.nan,
         verbose=False,
     )
+
+
+def resample_reduction(
+    wave_out: npt.ArrayLike, *, clip_to_coverage: bool = False
+):
+    """Create a chunk reducer for ModelGrid F_nu spectra.
+
+    Parameters
+    ----------
+    wave_out : array_like of shape (M,)
+        Target wavelengths in Angstroms.
+    clip_to_coverage : bool, default=False
+        Remove target bins that extend beyond the source wavelength coverage.
+
+    Returns
+    -------
+    reduction : callable
+        Called with the source wavelengths. Returns the target wavelengths and
+        a callable that resamples flux chunks of shape (C, N) to (C, M).
+        Input and output fluxes are F_nu in nJy.
+    """
+    target = np.asarray(wave_out, dtype=np.float32)
+
+    def reduction(wave_in: npt.NDArray[np.float32]):
+        selected = (
+            target[trim_wavelength_coverage_mask(target, wave_in)]
+            if clip_to_coverage
+            else target
+        )
+        if selected.size < 2:
+            raise ValueError(
+                "Target wavelength grid has fewer than two covered bins."
+            )
+
+        def reduce_flux(
+            flux: npt.NDArray[np.float32],
+        ) -> npt.NDArray[np.float32]:
+            flambda = fnu_to_flambda(wave_in, flux.astype(np.float64))
+            resampled = resample_spectrum(selected, wave_in, flambda)
+            return flambda_to_fnu(selected, resampled).astype(np.float32)
+
+        return selected, reduce_flux
+
+    return reduction
 
 
 def trim_wavelength_coverage_mask(
