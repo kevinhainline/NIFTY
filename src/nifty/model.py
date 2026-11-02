@@ -317,6 +317,8 @@ class Model:
         Interpolator object to use for modeling.
     axes_map : IndexMap
         Index map for axes. Must have a distance axis with key 'd'.
+    flux_interpolation : {'log', 'linear'}
+        Flux space used by the interpolator. Model outputs remain linear nJy.
 
     Attributes
     ----------
@@ -328,11 +330,14 @@ class Model:
 
     interp: RegularGridInterpolator
     axes_map: IndexMap
+    flux_interpolation: str
     n_params: int = field(init=False)
     n_interp_params: int = field(init=False)
     _d_index: int = field(init=False)
 
     def __post_init__(self):
+        if self.flux_interpolation not in ("log", "linear"):
+            raise ValueError("flux_interpolation must be 'log' or 'linear'.")
         object.__setattr__(self, "n_params", len(self.axes_map))
         object.__setattr__(self, "n_interp_params", len(self.interp.grid))
         object.__setattr__(self, "_d_index", self.axes_map["d"])
@@ -342,6 +347,8 @@ class Model:
         cls,
         model_grid: ModelGrid,
         filters: Sequence[str] | None = None,
+        *,
+        flux_interpolation: str = "log",
     ) -> Self:
         """
         Create a Model from the photometry data in a ModelGrid.
@@ -356,6 +363,8 @@ class Model:
         filters : tuple of str, optional
             Tuple of filter names to use from model_grid. If not provided, the
             filters are not changed from what is in model_grid.
+        flux_interpolation : {'log', 'linear'}, default='log'
+            Flux space for interpolation.
 
         Returns
         -------
@@ -368,6 +377,8 @@ class Model:
             )
         else:
             values = model_grid.phot
+        if flux_interpolation == "log":
+            values = _log_flux(values)
         interp = RegularGridInterpolator(
             model_grid.points,
             values,
@@ -376,7 +387,7 @@ class Model:
             fill_value=None,
         )
         axes_map = IndexMap(model_grid.axes + ("d",))
-        return cls(interp, axes_map)
+        return cls(interp, axes_map, flux_interpolation)
 
     @classmethod
     def spec(
@@ -385,6 +396,7 @@ class Model:
         wave: npt.NDArray[np.float32] | None = None,
         *,
         fit_mask: npt.NDArray[np.bool_] | None = None,
+        flux_interpolation: str = "log",
     ) -> Self:
         """
         Create a Model from the spectroscopy data in a ModelGrid.
@@ -401,6 +413,8 @@ class Model:
         fit_mask : ndarray of bool of shape (W,), optional
             Select wavelength bins for the fitted model after resampling onto
             the complete target wavelength grid.
+        flux_interpolation : {'log', 'linear'}, default='log'
+            Flux space for interpolation.
 
         Returns
         -------
@@ -415,6 +429,8 @@ class Model:
             values = model_grid.spec
         if fit_mask is not None:
             values = values[..., fit_mask]
+        if flux_interpolation == "log":
+            values = _log_flux(values)
         interp = RegularGridInterpolator(
             model_grid.points,
             values,
@@ -423,7 +439,7 @@ class Model:
             fill_value=None,
         )
         axes_map = IndexMap(model_grid.axes + ("d",))
-        return cls(interp, axes_map)
+        return cls(interp, axes_map, flux_interpolation)
 
     def __call__(
         self, theta: npt.NDArray[np.float32]
@@ -443,7 +459,9 @@ class Model:
             Model flux in nJy. The shape is the same as theta except the last
             axis is the flux.
         """
-        model_flux = self.interp(theta[..., : self.n_interp_params])  # nJy
+        model_flux = self.interp(theta[..., : self.n_interp_params])
+        if self.flux_interpolation == "log":
+            np.exp(model_flux, out=model_flux)
         object_radius = 0.10276 * 2.2555823856078e-8  # pc
         model_flux *= np.square(object_radius / theta[..., self._d_index])[
             ..., np.newaxis
@@ -459,7 +477,12 @@ class Model:
             bounds_error=self.interp.bounds_error,
             fill_value=self.interp.fill_value,
         )
-        return self.__class__(interp, self.axes_map)
+        return self.__class__(interp, self.axes_map, self.flux_interpolation)
+
+
+def _log_flux(flux: npt.NDArray[np.float32]) -> npt.NDArray[np.float32]:
+    """Log flux after flooring nonpositive values without changing the input."""
+    return np.log(np.maximum(flux, np.finfo(np.float32).tiny))
 
 
 def _resample_model_spectrum(
@@ -685,10 +708,11 @@ def fill_model_fit(
         missing = np.argwhere(nan_mask)
         missing_list = [tuple(index) for index in missing]
         new_grid = grid.copy()
+        log_grid = _log_flux(grid)
         for target in (
             tqdm(missing_list, desc=name) if progress_bar else missing_list
         ):
-            new_grid[target] = fill_point(model_grid.points, grid, target)
+            new_grid[target] = np.exp(fill_point(model_grid.points, log_grid, target))
         grids.append(new_grid)
     phot, spec = grids
     return ModelGrid(

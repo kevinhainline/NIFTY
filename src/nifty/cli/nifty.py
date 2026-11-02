@@ -112,6 +112,12 @@ def parse_arguments() -> argparse.Namespace:
         default="mcmc",
     )
     parent_parser.add_argument(
+        "--flux-interpolation",
+        choices=["log", "linear"],
+        default="log",
+        help="Flux space for model interpolation (default: log).",
+    )
+    parent_parser.add_argument(
         "--notex",
         help="Use matplotlib Mathtext instead of system TeX for plots.",
         action="store_true",
@@ -287,7 +293,9 @@ def main():
         print_filters(filter_names)
 
         # Create the model with an extra distance parameter.
-        model = Model.phot(model_grid, filter_names)
+        model = Model.phot(
+            model_grid, filter_names, flux_interpolation=args.flux_interpolation
+        )
 
         # Load the ID list file or use the ID arguments.
         if args.idlist is not None:
@@ -348,12 +356,14 @@ def main():
             raise ValueError(
                 "Spectrum has no wavelength bins within model coverage."
             )
-        model = Model.spec(fit_grid)
+        model = Model.spec(fit_grid, flux_interpolation=args.flux_interpolation)
         objects = [(args.obj_id, flux[coverage_mask], error[coverage_mask])]
 
     # We have to create a new model for spectroscopy, since NIFTY uses the
     # original model grid's wavelength for its SED.
-    spec_model = Model.spec(model_grid)
+    spec_model = Model.spec(
+        model_grid, flux_interpolation=args.flux_interpolation
+    )
 
     # Set up the probability object and the sampler.
     if args.mode == "spec" or args.frac_model_floor is None:
