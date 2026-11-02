@@ -15,6 +15,7 @@ from sedpy.observate import Filter
 
 from ..load import (
     load_filter_info,
+    load_lsf_text,
     load_phot_catalog_fits,
     load_phot_catalog_text,
     load_spec_text,
@@ -23,7 +24,7 @@ from ..model import Model, ModelGrid, linear_teff
 from ..plot import plot_corner, plot_photometry, plot_spectrum
 from ..prob import BayesianProbability, valid_observation_mask
 from ..sample import PosteriorSamples, sample_mcmc, sample_nautilus
-from ..spectra import resample_reduction
+from ..spectra import lsf_reduction, resample_reduction
 from .print import (
     print_banner,
     print_filters,
@@ -179,6 +180,9 @@ def parse_arguments() -> argparse.Namespace:
         required=True,
         dest="obj_id",
     )
+    spec_parser.add_argument(
+        "--lsf", help="LSF file with wavelength/dlds columns and lsf_fwhm metadata."
+    )
 
     return parser.parse_args()
 
@@ -248,9 +252,7 @@ def main():
     )
     model_grid = ModelGrid.load(
         args.model,
-        spec_reduction=resample_reduction(
-            sed_wave, clip_to_coverage=True
-        ),
+        spec_reduction=resample_reduction(sed_wave, clip_to_coverage=True),
     )
     if (
         args.mode == "phot"
@@ -330,9 +332,16 @@ def main():
         objects = [obj for obj in zip(ids, flux, error)]
     elif args.mode == "spec":
         wave, flux, error = load_spec_text(args.spectrum)
+        if args.lsf is None:
+            reduction = resample_reduction(wave, clip_to_coverage=True)
+        else:
+            lsf_wave, dlds, metadata = load_lsf_text(args.lsf)
+            reduction = lsf_reduction(
+                wave, lsf_wave, dlds, float(metadata["lsf_fwhm"])
+            )
         fit_grid = ModelGrid.load(
             args.model,
-            spec_reduction=resample_reduction(wave, clip_to_coverage=True),
+            spec_reduction=reduction,
         )
         coverage_mask = np.isin(wave, fit_grid.wave)
         if not np.any(coverage_mask):

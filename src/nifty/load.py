@@ -1,6 +1,8 @@
 """Load observed data and filters from various file formats."""
 
+import io
 import json
+import re
 from collections.abc import Sequence
 from pathlib import Path
 
@@ -12,10 +14,85 @@ from numpy.lib.recfunctions import structured_to_unstructured
 
 __all__ = [
     "load_filter_info",
+    "load_lsf_text",
     "load_phot_catalog_fits",
     "load_phot_catalog_text",
     "load_spec_text",
 ]
+
+
+def load_lsf_text(
+    path: str | Path,
+) -> tuple[
+    npt.NDArray[np.float64],
+    npt.NDArray[np.float64],
+    dict[str, str | int | float],
+]:
+    """Read a wavelength-dependent line-spread function from a text file.
+
+    The file has a ``wavelength dlds`` header followed by whitespace-delimited
+    wavelength (microns) and dispersion (microns per pixel) columns. Comment
+    lines of the form ``# key: value`` provide metadata. Values are read as
+    integers, floats, or strings. A positive numeric ``lsf_fwhm`` value in
+    pixels is required.
+
+    Parameters
+    ----------
+    path : str or Path
+        Path to the LSF text file.
+
+    Returns
+    -------
+    wave : ndarray of shape (N,)
+        Strictly increasing LSF wavelengths in Angstroms.
+    dlds : ndarray of shape (N,)
+        Positive dispersion values in Angstroms per pixel.
+    metadata : dict of str to str, int, or float
+        Parsed header values, including ``lsf_fwhm`` in pixels.
+
+    Raises
+    ------
+    ValueError
+        If the header, columns, or LSF values are invalid.
+    """
+    metadata: dict[str, str | int | float] = {}
+    rows: list[str] = []
+    with open(path) as file:
+        for line in file:
+            stripped = line.strip()
+            if stripped.startswith("#"):
+                item = stripped[1:].strip()
+                if ":" in item:
+                    key, value = (part.strip() for part in item.split(":", 1))
+                    if re.fullmatch(r"[+-]?\d+", value):
+                        metadata[key] = int(value)
+                    else:
+                        try:
+                            metadata[key] = float(value)
+                        except ValueError:
+                            metadata[key] = value
+            elif stripped:
+                rows.append(line)
+    if not rows or rows[0].strip().split() != ["wavelength", "dlds"]:
+        raise ValueError("LSF file must have 'wavelength dlds' columns.")
+    table = np.loadtxt(io.StringIO("".join(rows[1:])), ndmin=2)
+    if table.ndim != 2 or table.shape[1] != 2 or len(table) < 2:
+        raise ValueError("LSF file needs at least two wavelength/dlds rows.")
+    wave, dlds = table.T
+    if (
+        not np.all(np.isfinite(table))
+        or not np.all(wave > 0)
+        or not np.all(np.diff(wave) > 0)
+        or not np.all(dlds > 0)
+    ):
+        raise ValueError(
+            "LSF wavelength and dlds must be finite, positive, "
+            "and wavelengths increasing."
+        )
+    fwhm = metadata.get("lsf_fwhm")
+    if not isinstance(fwhm, (int, float)) or not np.isfinite(fwhm) or fwhm <= 0:
+        raise ValueError("LSF file needs a positive numeric lsf_fwhm header.")
+    return wave * 1e4, dlds * 1e4, metadata
 
 
 def load_phot_catalog_text(
@@ -145,7 +222,7 @@ def load_spec_text(
     Returns
     -------
     wave : ndarray
-        Wavelength in microns.
+        Wavelength in Angstroms.
     flux : ndarray
         Flux in nJy.
     error : ndarray
