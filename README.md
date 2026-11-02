@@ -113,7 +113,23 @@ nifty spec \
   --model path/to/model_grid.tar.gz \
   --stub JADES-GS \
   --id 20541 \
+  --lsf jwst_nirspec_prism_lsf.txt \
   path/to/spectrum.txt
+```
+
+`--lsf` is optional. It convolves the fitting model with a wavelength-dependent
+Gaussian line-spread function before resampling to the observed spectrum. The
+LSF text file has `wavelength dlds` columns in microns and microns per pixel,
+and a header such as `# lsf_fwhm: 2.2` giving the Gaussian FWHM in pixels.
+The table must cover the full wavelength bins fitted to the spectrum. Bins
+without five standard deviations of model coverage are excluded from the fit.
+
+```
+# lsf_fwhm: 2.2
+wavelength dlds
+0.5 0.002498274902
+0.5055000186 0.002581773559
+...
 ```
 
 ### Optional arguments
@@ -122,7 +138,8 @@ nifty spec \
 |---|---|
 | `--output` | Output folder (default: `<Model>_output/`) |
 | `--frac_model_floor` | Fractional model flux floor added in quadrature to photometry errors, to account for model systematics (e.g. `0.03` for 3%). Photometry mode only; no floor is applied in spectroscopy mode. |
-| `--sampler` | Sampler used to estimate the posterior. Currently supports `mcmc` and `nautilus` |
+| `--flux-interpolation` | Flux interpolation method. Either `linear` or `log`. Defaults to `log`.  |
+| `--sampler` | Sampler used to estimate the posterior. Currently supports `mcmc` and `nautilus`. |
 | `--notex` | Use matplotlib Mathtext instead of system TeX for plots. |
 
 ## Configuration File (`--config`)
