@@ -3,7 +3,7 @@
 import io
 import json
 import tarfile
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Self
@@ -77,19 +77,42 @@ class ModelGrid:
     wave: np.ndarray[tuple[int], np.dtype[np.float32]]
 
     @classmethod
-    def load(cls, path: str | Path) -> Self:
+    def load(
+        cls,
+        path: str | Path,
+        *,
+        spec_reduction: Callable[
+            [npt.NDArray[np.float32]],
+            tuple[
+                npt.NDArray[np.float32],
+                Callable[[npt.NDArray[np.float32]], npt.NDArray[np.float32]],
+            ],
+        ]
+        | None = None,
+        chunk_size: int = 4096,
+    ) -> Self:
         """Load a ModelGrid from a file.
 
         Parameters
         ----------
-        path : str
+        path : str or Path
             Path to the file to load.
+        spec_reduction : callable, optional
+            Called once with the source wavelength array in Angstroms. It
+            returns (wave_out, reduce_flux), where reduce_flux maps
+            each F_nu chunk of shape (C, N) in nJy to shape (C, M).
+            If omitted, load the original spectroscopy array.
+        chunk_size : int, default=4096
+            Maximum number of flattened spectra supplied to reduce_flux at
+            once. Used only when spec_reduction is provided.
 
         Returns
         -------
-        obj : ModelGrid
+        model_grid : ModelGrid
             An instance of the ModelGrid loaded from the file.
         """
+        if chunk_size < 1:
+            raise ValueError("chunk_size must be positive.")
         with tarfile.open(path, mode="r|gz") as tar:
             meta_member = tar.next()
             if meta_member is None:
@@ -105,8 +128,63 @@ class ModelGrid:
                 name = Path(member.name).stem
                 array_file = tar.extractfile(member)
                 assert array_file is not None
+                if name == "spec" and spec_reduction is not None:
+                    continue
                 arrays[name] = np.load(io.BytesIO(array_file.read()))
             points = tuple(arrays[name] for name in meta["axes"])
+        if spec_reduction is not None:
+            wave_in = arrays["wave"]
+            wave_out, reduce_flux = spec_reduction(wave_in)
+            wave_out = np.asarray(wave_out, dtype=np.float32)
+            with tarfile.open(path, mode="r|gz") as tar:
+                for member in tar:
+                    if Path(member.name).stem == "spec":
+                        spec_file = tar.extractfile(member)
+                        assert spec_file is not None
+                        version = np.lib.format.read_magic(spec_file)
+                        if version == (1, 0):
+                            shape, fortran, dtype = (
+                                np.lib.format.read_array_header_1_0(spec_file)
+                            )
+                        elif version == (2, 0):
+                            shape, fortran, dtype = (
+                                np.lib.format.read_array_header_2_0(spec_file)
+                            )
+                        else:
+                            raise ValueError(
+                                f"Unsupported spec.npy version: {version}"
+                            )
+                        if fortran or dtype.hasobject or len(shape) < 2:
+                            raise ValueError(
+                                "spec.npy must be a C-order numeric grid."
+                            )
+                        count = int(np.prod(shape[:-1]))
+                        output = np.empty(
+                            (count, len(wave_out)), dtype=np.float32
+                        )
+                        for start in range(0, count, chunk_size):
+                            rows = min(chunk_size, count - start)
+                            raw = spec_file.read(
+                                rows * shape[-1] * dtype.itemsize
+                            )
+                            if len(raw) != rows * shape[-1] * dtype.itemsize:
+                                raise ValueError("Truncated spec.npy data.")
+                            chunk = np.frombuffer(raw, dtype=dtype).reshape(
+                                rows, shape[-1]
+                            )
+                            reduced = np.asarray(reduce_flux(chunk))
+                            if reduced.shape != (rows, len(wave_out)):
+                                raise ValueError(
+                                    "Spectrum reducer returned an invalid chunk shape."
+                                )
+                            output[start : start + rows] = reduced
+                        arrays["spec"] = output.reshape(
+                            shape[:-1] + (len(wave_out),)
+                        )
+                        arrays["wave"] = wave_out
+                        break
+                else:
+                    raise ValueError("Archive has no spec.npy member.")
         return cls(
             points=points,
             phot=arrays["phot"],
@@ -239,6 +317,8 @@ class Model:
         Interpolator object to use for modeling.
     axes_map : IndexMap
         Index map for axes. Must have a distance axis with key 'd'.
+    flux_interpolation : {'log', 'linear'}
+        Flux space used by the interpolator. Model outputs remain linear nJy.
 
     Attributes
     ----------
@@ -250,11 +330,14 @@ class Model:
 
     interp: RegularGridInterpolator
     axes_map: IndexMap
+    flux_interpolation: str
     n_params: int = field(init=False)
     n_interp_params: int = field(init=False)
     _d_index: int = field(init=False)
 
     def __post_init__(self):
+        if self.flux_interpolation not in ("log", "linear"):
+            raise ValueError("flux_interpolation must be 'log' or 'linear'.")
         object.__setattr__(self, "n_params", len(self.axes_map))
         object.__setattr__(self, "n_interp_params", len(self.interp.grid))
         object.__setattr__(self, "_d_index", self.axes_map["d"])
@@ -264,6 +347,8 @@ class Model:
         cls,
         model_grid: ModelGrid,
         filters: Sequence[str] | None = None,
+        *,
+        flux_interpolation: str = "log",
     ) -> Self:
         """
         Create a Model from the photometry data in a ModelGrid.
@@ -278,6 +363,8 @@ class Model:
         filters : tuple of str, optional
             Tuple of filter names to use from model_grid. If not provided, the
             filters are not changed from what is in model_grid.
+        flux_interpolation : {'log', 'linear'}, default='log'
+            Flux space for interpolation.
 
         Returns
         -------
@@ -290,6 +377,8 @@ class Model:
             )
         else:
             values = model_grid.phot
+        if flux_interpolation == "log":
+            values = _log_flux(values)
         interp = RegularGridInterpolator(
             model_grid.points,
             values,
@@ -298,7 +387,7 @@ class Model:
             fill_value=None,
         )
         axes_map = IndexMap(model_grid.axes + ("d",))
-        return cls(interp, axes_map)
+        return cls(interp, axes_map, flux_interpolation)
 
     @classmethod
     def spec(
@@ -307,6 +396,7 @@ class Model:
         wave: npt.NDArray[np.float32] | None = None,
         *,
         fit_mask: npt.NDArray[np.bool_] | None = None,
+        flux_interpolation: str = "log",
     ) -> Self:
         """
         Create a Model from the spectroscopy data in a ModelGrid.
@@ -323,6 +413,8 @@ class Model:
         fit_mask : ndarray of bool of shape (W,), optional
             Select wavelength bins for the fitted model after resampling onto
             the complete target wavelength grid.
+        flux_interpolation : {'log', 'linear'}, default='log'
+            Flux space for interpolation.
 
         Returns
         -------
@@ -337,6 +429,8 @@ class Model:
             values = model_grid.spec
         if fit_mask is not None:
             values = values[..., fit_mask]
+        if flux_interpolation == "log":
+            values = _log_flux(values)
         interp = RegularGridInterpolator(
             model_grid.points,
             values,
@@ -345,7 +439,7 @@ class Model:
             fill_value=None,
         )
         axes_map = IndexMap(model_grid.axes + ("d",))
-        return cls(interp, axes_map)
+        return cls(interp, axes_map, flux_interpolation)
 
     def __call__(
         self, theta: npt.NDArray[np.float32]
@@ -365,7 +459,9 @@ class Model:
             Model flux in nJy. The shape is the same as theta except the last
             axis is the flux.
         """
-        model_flux = self.interp(theta[..., : self.n_interp_params])  # nJy
+        model_flux = self.interp(theta[..., : self.n_interp_params])
+        if self.flux_interpolation == "log":
+            np.exp(model_flux, out=model_flux)
         object_radius = 0.10276 * 2.2555823856078e-8  # pc
         model_flux *= np.square(object_radius / theta[..., self._d_index])[
             ..., np.newaxis
@@ -381,7 +477,12 @@ class Model:
             bounds_error=self.interp.bounds_error,
             fill_value=self.interp.fill_value,
         )
-        return self.__class__(interp, self.axes_map)
+        return self.__class__(interp, self.axes_map, self.flux_interpolation)
+
+
+def _log_flux(flux: npt.NDArray[np.float32]) -> npt.NDArray[np.float32]:
+    """Log flux after flooring nonpositive values without changing the input."""
+    return np.log(np.maximum(flux, np.finfo(np.float32).tiny))
 
 
 def _resample_model_spectrum(
@@ -607,10 +708,11 @@ def fill_model_fit(
         missing = np.argwhere(nan_mask)
         missing_list = [tuple(index) for index in missing]
         new_grid = grid.copy()
+        log_grid = _log_flux(grid)
         for target in (
             tqdm(missing_list, desc=name) if progress_bar else missing_list
         ):
-            new_grid[target] = fill_point(model_grid.points, grid, target)
+            new_grid[target] = np.exp(fill_point(model_grid.points, log_grid, target))
         grids.append(new_grid)
     phot, spec = grids
     return ModelGrid(
