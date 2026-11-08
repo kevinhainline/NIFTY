@@ -28,7 +28,6 @@ __all__ = [
     "build_sonora_elf_owl",
     "build_sonora_flame_skimmer_disequilibrium",
     "build_sonora_flame_skimmer_equilibrium",
-    "build_sonora_flame_skimmer_quickstart",
     "build_sonora_ph3",
 ]
 
@@ -346,115 +345,6 @@ def _build_sonora_flame_skimmer(
         model_name=(
             "SonoraFlameSkimmerEq" if equilibrium else "SonoraFlameSkimmerDeq"
         ),
-        wave=new_wave,
-    )
-
-
-# ============================================================
-# Model: Sonora Flame Skimmer (Quickstart)
-#
-# Expected layout
-# -------------------------
-#   spectra_R3k_quickstart.zip
-#      R3000_starter_spectra_manifest.csv
-#      deq/mh_+0.0/co_0.5/spectra_logkzz_2_teff_1000_grav_1000_mh_+0.0_co_0.5_R3000.nc
-#      ...
-# ============================================================
-def build_sonora_flame_skimmer_quickstart(
-    path: Path | str,
-    *,
-    filters: Sequence[Filter],
-    filter_names: Sequence[str],
-    progress_bar: bool = True,
-) -> ModelGrid:
-    """Build the raw Sonora Flame Skimmer Quickstart Model.
-
-    Parameters
-    ----------
-    path : Path or str
-        Path to the R3k quickstart Sonora Flame Skimmer models.
-    filters : sequence of sedpy.observate.Filter
-        Photometric filters.
-    filter_names : sequence of str
-        Names of photometric filters to store as metadata.
-    progress_bar : bool, default=True
-        Display a progress bar while loading the model.
-
-    Returns
-    -------
-    model_grid : ModelGrid
-        Sonora Flame Skimmer Quickstart ModelGrid object.
-
-    Notes
-    -----
-    The quickstart models are sampled on a sparser grid than the full models and
-    include lower resolution spectra. This reduced size makes them significantly
-    easier to process (The full models cover ~150 GB whereas the quickstart
-    models are ~9 GB). For NIFTY, the lower resolution spectra negligibly affect
-    photometry and spectroscopy. In some cases, the sparser grid will lead to
-    greater interpolation errors.
-
-    This function only builds the disequilibrium chemistry models, ignoring the
-    equilibrium models.
-    """
-    try:
-        import xarray
-    except ImportError:
-        raise ImportError(
-            "Building models requires the [build-model] optional dependencies. "
-            "Install with `pip install astro-nifty[build-model]`"
-        )
-    values = []
-    model_wave = None
-    new_wave = LOWER_RES_WAVE
-    with zipfile.ZipFile(path) as zip_ref:
-        with zip_ref.open("R3000_starter_spectra_manifest.csv") as f:
-            index = pd.read_csv(f)
-            index = index[index["chem"] == "deq"]
-        for path, *params in tqdm(
-            zip(
-                index["relative_path"],
-                index["teff"],
-                index["grav"],
-                index["logkzz"],
-                index["mh"],
-                index["co"],
-            ),
-            disable=not progress_bar,
-            total=len(index),
-        ):
-            with zip_ref.open(path) as f:
-                data = xarray.load_dataset(f, engine="h5netcdf")
-            params = (
-                np.log10(params[0]),
-                np.log10(params[1]) + 2.0,  # cgs
-                params[2],
-                params[3],
-                # Normalize to absolute C/O based on Flame Skimmer's solar C/O.
-                params[4] * 0.458,
-            )
-            flux = data["flux_emission"].values * 1e-8  # erg/s/cm^2/Ang
-            flux = flux[::-1]
-            if model_wave is None:
-                model_wave = data["wavelength"].values * 1e4  # Ang
-                model_wave = model_wave[::-1]
-                assert np.all(model_wave[1:] >= model_wave[:-1])
-                new_wave = trim_wavelength_coverage(LOWER_RES_WAVE, model_wave)
-            arrays = (
-                _filter_fluxes(model_wave, flux, filters) * 1e23 * 1e9,  # nJy
-                flambda_to_fnu(
-                    new_wave,  # Ang
-                    resample_spectrum(new_wave, model_wave, flux),
-                )
-                * 1e23
-                * 1e9,  # nJy
-            )
-            values.append((params, arrays))
-    return _build_from_values(
-        values,
-        filter_names=filter_names,
-        axes=["teff", "logg", "kzz", "mh", "co"],
-        model_name="SonoraFlameSkimmerQuickstart",
         wave=new_wave,
     )
 
