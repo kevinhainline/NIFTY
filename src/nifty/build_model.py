@@ -7,7 +7,7 @@ import tarfile
 import tempfile
 import zipfile
 from collections.abc import Sequence
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Protocol, Self
 
 import numpy as np
@@ -26,6 +26,9 @@ __all__ = [
     "build_sonora_diamondback_cloudless",
     "build_sonora_diamondback_cloudy",
     "build_sonora_elf_owl",
+    "build_sonora_flame_skimmer_disequilibrium",
+    "build_sonora_flame_skimmer_equilibrium",
+    "build_sonora_flame_skimmer_quickstart",
     "build_sonora_ph3",
 ]
 
@@ -175,6 +178,176 @@ def _filter_fluxes(
     for i, f in enumerate(filters):
         fluxes[..., i] = _ab_mag_to_fnu_cgs(f.ab_mag(wave, flux))
     return fluxes
+
+
+# ============================================================
+# Model: Sonora Flame Skimmer
+#
+# Expected directory layout
+# -------------------------
+#   <model_path>/spectra_R30k_*_<chem>.zip
+#       flameskimmer_R30000_teff_<Tmin>-<Tmax>_<chem>/manifest.csv
+#       flameskimmer_R30000_teff_<Tmin>-<Tmax>_<chem>/teff_*/.../*.nc
+# ============================================================
+def build_sonora_flame_skimmer_disequilibrium(
+    path: Path | str,
+    *,
+    filters: Sequence[Filter],
+    filter_names: Sequence[str],
+    progress_bar: bool = True,
+) -> ModelGrid:
+    """Build the raw Sonora Flame Skimmer disequilibrium ModelGrid.
+
+    Parameters
+    ----------
+    path : Path or str
+        Directory containing spectra_R30k_*_deq.zip archives.
+    filters : sequence of sedpy.observate.Filter
+        Photometric filters.
+    filter_names : sequence of str
+        Names of photometric filters to store as metadata.
+    progress_bar : bool, default=True
+        Display a progress bar while loading each archive.
+
+    Returns
+    -------
+    model_grid : ModelGrid
+        Sonora Flame Skimmer ModelGrid with disequilibrium chemistry only.
+    """
+    return _build_sonora_flame_skimmer(
+        path,
+        equilibrium=False,
+        filters=filters,
+        filter_names=filter_names,
+        progress_bar=progress_bar,
+    )
+
+
+def build_sonora_flame_skimmer_equilibrium(
+    path: Path | str,
+    *,
+    filters: Sequence[Filter],
+    filter_names: Sequence[str],
+    progress_bar: bool = True,
+) -> ModelGrid:
+    """Build the raw Sonora Flame Skimmer equilibrium ModelGrid.
+
+    Parameters
+    ----------
+    path : Path or str
+        Directory containing spectra_R30k_*_eq.zip archives.
+    filters : sequence of sedpy.observate.Filter
+        Photometric filters.
+    filter_names : sequence of str
+        Names of photometric filters to store as metadata.
+    progress_bar : bool, default=True
+        Display a progress bar while loading each archive.
+
+    Returns
+    -------
+    model_grid : ModelGrid
+        Sonora Flame Skimmer ModelGrid with equilibrium chemistry only.
+    """
+    return _build_sonora_flame_skimmer(
+        path,
+        equilibrium=True,
+        filters=filters,
+        filter_names=filter_names,
+        progress_bar=progress_bar,
+    )
+
+
+def _build_sonora_flame_skimmer(
+    path: Path | str,
+    *,
+    equilibrium: bool,
+    filters: Sequence[Filter],
+    filter_names: Sequence[str],
+    progress_bar: bool,
+) -> ModelGrid:
+    try:
+        import xarray
+    except ImportError:
+        raise ImportError(
+            "Building models requires the [build-model] optional dependencies. "
+            "Install with `pip install astro-nifty[build-model]`"
+        )
+    path = Path(path)
+    chemistry = "eq" if equilibrium else "deq"
+    parts = sorted(path.glob(f"spectra_R30k_*_{chemistry}.zip"))
+
+    values = []
+    model_wave = None
+    new_wave = LOWER_RES_WAVE
+    for part in parts:
+        with zipfile.ZipFile(part) as zip_ref:
+            manifest_paths = [
+                PurePosixPath(info.filename)
+                for info in zip_ref.infolist()
+                if not info.is_dir()
+                and PurePosixPath(info.filename).name == "manifest.csv"
+            ]
+            if len(manifest_paths) != 1:
+                raise ValueError(
+                    f"{part}: expected one manifest.csv, found {len(manifest_paths)}"
+                )
+            parent_path = manifest_paths[0].parent
+            with zip_ref.open(str(manifest_paths[0])) as f:
+                index = pd.read_csv(f)
+            index = index[index["chem"] == chemistry]
+            for relative_path, teff, grav, logkzz, mh, co in tqdm(
+                zip(
+                    index["relative_path"],
+                    index["teff"],
+                    index["grav"],
+                    index["logkzz"],
+                    index["mh"],
+                    index["co"],
+                ),
+                total=len(index),
+                desc=part.name,
+                disable=not progress_bar,
+            ):
+                input_file = zip_ref.open(str(parent_path / relative_path))
+                with input_file as f:
+                    data = xarray.load_dataset(f, engine="h5netcdf")
+                params = (
+                    np.log10(teff),
+                    np.log10(grav) + 2.0,  # cgs
+                    *((logkzz,) if not equilibrium else ()),
+                    mh,
+                    co * 0.458,  # absolute C/O
+                )
+                if model_wave is None:
+                    model_wave = data["wavelength"].values * 1e4  # Ang
+                    assert np.all(model_wave[1:] >= model_wave[:-1])
+                    new_wave = trim_wavelength_coverage(
+                        LOWER_RES_WAVE, model_wave
+                    )
+                flux = data["flux_emission"].values * 1e-8  # erg/s/cm^2/Ang
+                arrays = (
+                    _filter_fluxes(model_wave, flux, filters)
+                    * 1e23
+                    * 1e9,  # nJy
+                    flambda_to_fnu(
+                        new_wave,
+                        resample_spectrum(new_wave, model_wave, flux),
+                    )
+                    * 1e23
+                    * 1e9,  # nJy
+                )
+                values.append((params, arrays))
+    if not values:
+        raise ValueError(f"No {chemistry} spectra found in manifests in {path}")
+    return _build_from_values(
+        values,
+        filter_names=filter_names,
+        axes=["teff", "logg", *([] if equilibrium else ["kzz"]), "mh", "co"],
+        model_name=(
+            "SonoraFlameSkimmerEq" if equilibrium else "SonoraFlameSkimmerDeq"
+        ),
+        wave=new_wave,
+    )
 
 
 # ============================================================
