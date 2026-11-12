@@ -11,7 +11,8 @@ from ..build_model import (
     build_sonora_diamondback_cloudless,
     build_sonora_diamondback_cloudy,
     build_sonora_elf_owl,
-    build_sonora_flame_skimmer_quickstart,
+    build_sonora_flame_skimmer_disequilibrium,
+    build_sonora_flame_skimmer_equilibrium,
     build_sonora_ph3,
     load_filters,
 )
@@ -19,7 +20,8 @@ from ..model import fill_model_fit
 from .print import print_banner, print_filters
 
 BUILD_FUNCTION = {
-    "SonoraFlameSkimmerQuickstart": build_sonora_flame_skimmer_quickstart,
+    "SonoraFlameSkimmerDeq": build_sonora_flame_skimmer_disequilibrium,
+    "SonoraFlameSkimmerEq": build_sonora_flame_skimmer_equilibrium,
     "SonoraDiamondbackCloudy": build_sonora_diamondback_cloudy,
     "SonoraDiamondbackCloudless": build_sonora_diamondback_cloudless,
     "SonoraElfOwl": build_sonora_elf_owl,
