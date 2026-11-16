@@ -110,6 +110,11 @@ class ModelGrid:
         -------
         model_grid : ModelGrid
             An instance of the ModelGrid loaded from the file.
+
+        Raises
+        ------
+        ValueError
+            If an archive array is not C-contiguous.
         """
         if chunk_size < 1:
             raise ValueError("chunk_size must be positive.")
@@ -130,7 +135,10 @@ class ModelGrid:
                 assert array_file is not None
                 if name == "spec" and spec_reduction is not None:
                     continue
-                arrays[name] = np.load(io.BytesIO(array_file.read()))
+                array = np.load(io.BytesIO(array_file.read()))
+                if not array.flags.c_contiguous:
+                    raise ValueError(f"{name}.npy must be C-contiguous.")
+                arrays[name] = array
             points = tuple(arrays[name] for name in meta["axes"])
         if spec_reduction is not None:
             wave_in = arrays["wave"]
@@ -154,10 +162,8 @@ class ModelGrid:
                             raise ValueError(
                                 f"Unsupported spec.npy version: {version}"
                             )
-                        if fortran or dtype.hasobject or len(shape) < 2:
-                            raise ValueError(
-                                "spec.npy must be a C-order numeric grid."
-                            )
+                        if fortran and sum(dim > 1 for dim in shape) > 1:
+                            raise ValueError("spec.npy must be C-contiguous.")
                         count = int(np.prod(shape[:-1]))
                         output = np.empty(
                             (count, len(wave_out)), dtype=np.float32
@@ -206,7 +212,7 @@ class ModelGrid:
         Parameters
         ----------
         path : str
-            The path to save the ModelGrid.
+            The path to save the ModelGrid. Arrays are saved in C order.
         """
 
         # Write JSON metadata to bytes.
@@ -217,7 +223,7 @@ class ModelGrid:
         # Write an ndarray to bytes.
         def _write_array(obj):
             buffer = io.BytesIO()
-            np.save(buffer, obj)
+            np.save(buffer, np.ascontiguousarray(obj))
             return buffer.getvalue()
 
         # Add some bytes to a tar file.

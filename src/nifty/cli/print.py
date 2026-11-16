@@ -24,7 +24,8 @@ AXIS_LABEL = {
 
 # Model key to readable name.
 MODEL_LABEL = {
-    "SonoraFlameSkimmerQuickstart": "Sonora Flame Skimmer (Quickstart)",
+    "SonoraFlameSkimmerDeq": "Sonora Flame Skimmer (Disequilibrium)",
+    "SonoraFlameSkimmerEq": "Sonora Flame Skimmer (Equilibrium)",
     "SonoraDiamondbackCloudy": "Sonora Diamondback (Cloudy)",
     "SonoraDiamondbackCloudless": "Sonora Diamondback (Cloudless)",
     "SonoraElfOwl": "Sonora Elf Owl",

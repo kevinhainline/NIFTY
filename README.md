@@ -217,7 +217,8 @@ Each file name is prefixed with `<stub>_<ID>_<Model>_`.
 | `SonoraElfOwlPH3` | Teff, log(g), log(Kzz), [M/H], C/O, distance (pc) |
 | `SonoraDiamondbackCloudy` | Teff, log(g), [M/H], f_sed, distance (pc) |
 | `SonoraDiamondbackCloudless` | Teff, log(g), [M/H], distance (pc) |
-| `SonoraFlameSkimmerQuickstart` | Teff, log(g), log(Kzz), [M/H], C/O, distance (pc) |
+| `SonoraFlameSkimmerDeq` | Teff, log(g), log(Kzz), [M/H], C/O, distance (pc) |
+| `SonoraFlameSkimmerEq` | Teff, log(g), [M/H], C/O, distance (pc) |
 
 All fits assume a source radius of 1 Jupiter radius. Distances are always
 reported in parsecs.
@@ -225,7 +226,7 @@ reported in parsecs.
 ## The ModelGrid Files
 
 While you can create your own ModelGrid files for fitting (see below), we have prepared
-files for the ATMO2020, LOWZ, Sonora Elf Owl, SonoraElfOwlPH3, and SonoraFlameSkimmerQuickstart
+files for the ATMO2020, LOWZ, Sonora Elf Owl, SonoraElfOwlPH3, and Sonora Flame Skimmer
 fits at this link:
 
 [https://arizona.box.com/v/NiftyModelGrids](https://arizona.box.com/v/NiftyModelGrids)
@@ -250,9 +251,7 @@ build_model \
     ModelName
 ```
 
-The valid model names are the same as the names in the table above. At this 
-time, NIFTY does not support creating the SonoraFlameSkimmer complete models 
-from scratch.
+The valid model names are the same as the names in the table above.
 
 Typically, two ModelGrid files are produced. The **raw grid** is the
 grid created by reading in all the points that are part of the model. However, 
@@ -264,14 +263,25 @@ details). If the raw grid is already complete, only the complete grid is saved.
 By default, the output model grid files are named 
 `<Model>_raw_ModelGrid.tar.gz` and `<Model>_complete_ModelGrid.tar.gz`.
 
-The Sonora Elf Owl model grid spans several tens of GB and can take a few hours
-to process. The other grids are considerably smaller.
+The Sonora Elf Owl and full Sonora Flame Skimmer model grids span tens to
+hundreds of GB and can take hours to process.
 
 ### Expected Model File Layouts
 
-**SonoraFlameSkimmerQuickstart** — A single zip file:
+**SonoraFlameSkimmerDeq** — directory of disequilibrium ZIP archives:
 ```
-spectra_R3k_quickstart.zip
+Sonora_Flame_Skimmer/
+    spectra_R30k_set01_teff_50-100_deq.zip
+    spectra_R30k_set02_teff_125-175_deq.zip
+    ...
+```
+
+**SonoraFlameSkimmerEq** — directory of equilibrium ZIP archives:
+```
+Sonora_Flame_Skimmer/
+    spectra_R30k_set01_teff_50-100_eq.zip
+    spectra_R30k_set02_teff_125-175_eq.zip
+    ...
 ```
 
 **SonoraDiamondbackCloudy** and **SonoraDiamondbackCloudless** — A single zip file:
